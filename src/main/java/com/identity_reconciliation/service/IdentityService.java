@@ -4,32 +4,33 @@ import com.identity_reconciliation.dto.IdentityRequest;
 import com.identity_reconciliation.dto.IdentityResponse;
 import com.identity_reconciliation.entity.Contact;
 import com.identity_reconciliation.repository.ContactRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class IdentityService {
-    @Autowired
-    private ContactRepository repository;
+    private final ContactRepository repository;
 
+    @Transactional
     public IdentityResponse reconcile(IdentityRequest request) {
         String email = request.getEmail();
         String phone = request.getPhoneNumber();
 
-        // 1. Fetch all potentially related contacts
+        // 1. Fetch matching contacts [cite: 27]
         List<Contact> matches = repository.findByEmailOrPhoneNumber(email, phone);
 
-        // CASE 1: No matches found - Create new Primary contact
+        // CASE: New User [cite: 89]
         if (matches.isEmpty()) {
-            Contact newPrimary = createContact(email, phone, null, Contact.LinkPrecedence.primary);
+            Contact newPrimary = saveContact(email, phone, null, Contact.LinkPrecedence.primary);
             return formatResponse(newPrimary, Collections.emptyList());
         }
 
-        // 2. Identify all Primary contacts involved in the matches
+        // 2. Identify all involved Primaries [cite: 26]
         Set<Integer> primaryIds = matches.stream()
                 .map(c -> c.getLinkedId() != null ? c.getLinkedId() : c.getId())
                 .collect(Collectors.toSet());
@@ -38,75 +39,67 @@ public class IdentityService {
                 .sorted(Comparator.comparing(Contact::getCreatedAt))
                 .collect(Collectors.toList());
 
-        Contact truePrimary = allPrimaries.get(0); // The oldest one is always the true primary [cite: 26]
+        Contact truePrimary = allPrimaries.get(0); // Oldest is primary [cite: 26]
 
-        // CASE 2: Merging two existing Primary contacts
+        // 3. Handle Merging (Primary to Secondary) [cite: 144]
         if (allPrimaries.size() > 1) {
             for (int i = 1; i < allPrimaries.size(); i++) {
-                Contact otherPrimary = allPrimaries.get(i);
-                otherPrimary.setLinkPrecedence(Contact.LinkPrecedence.secondary);
-                otherPrimary.setLinkedId(truePrimary.getId());
-                otherPrimary.setUpdatedAt(LocalDateTime.now());
-                repository.save(otherPrimary);
+                Contact newerPrimary = allPrimaries.get(i);
+                if (!newerPrimary.getId().equals(truePrimary.getId())) {
+                    newerPrimary.setLinkPrecedence(Contact.LinkPrecedence.secondary);
+                    newerPrimary.setLinkedId(truePrimary.getId());
+                    newerPrimary.setUpdatedAt(LocalDateTime.now());
+                    repository.save(newerPrimary);
 
-                // Also update any secondaries that were pointing to the now-demoted primary
-                List<Contact> orphanSecondaries = repository.findByLinkedIdOrId(otherPrimary.getId(), otherPrimary.getId());
-                for(Contact s : orphanSecondaries) {
-                    s.setLinkedId(truePrimary.getId());
-                    repository.save(s);
+                    // Re-link children of the demoted primary [cite: 24]
+                    List<Contact> children = repository.findByLinkedId(newerPrimary.getId());
+                    children.forEach(c -> {
+                        c.setLinkedId(truePrimary.getId());
+                        repository.save(c);
+                    });
                 }
             }
         }
 
-        // CASE 3: New information provided (e.g., new email for existing phone)
         boolean isNewEmail = email != null && matches.stream().noneMatch(c -> email.equals(c.getEmail()));
         boolean isNewPhone = phone != null && matches.stream().noneMatch(c -> phone.equals(c.getPhoneNumber()));
 
         if (isNewEmail || isNewPhone) {
-            createContact(email, phone, truePrimary.getId(), Contact.LinkPrecedence.secondary);
+            saveContact(email, phone, truePrimary.getId(), Contact.LinkPrecedence.secondary);
         }
 
-        // 3. Consolidate data for the final response
         List<Contact> allRelated = repository.findByLinkedIdOrId(truePrimary.getId(), truePrimary.getId());
         return formatResponse(truePrimary, allRelated);
     }
 
-    private Contact createContact(String email, String phone, Integer linkedId, Contact.LinkPrecedence precedence) {
-        Contact contact = new Contact();
-        contact.setEmail(email);
-        contact.setPhoneNumber(phone);
-        contact.setLinkedId(linkedId);
-        contact.setLinkPrecedence(precedence);
-        contact.setCreatedAt(LocalDateTime.now());
-        contact.setUpdatedAt(LocalDateTime.now());
-        return repository.save(contact);
+    private Contact saveContact(String e, String p, Integer lId, Contact.LinkPrecedence lp) {
+        return repository.save(Contact.builder()
+                .email(e).phoneNumber(p).linkedId(lId).linkPrecedence(lp)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build());
     }
 
-    private IdentityResponse formatResponse(Contact primary, List<Contact> allRelated) {
-        IdentityResponse response = new IdentityResponse();
-        IdentityResponse.ContactDetails details = new IdentityResponse.ContactDetails();
-
-        details.setPrimaryContactId(primary.getId());
-
-        // Ensure primary contact info is first in arrays [cite: 48, 50]
+    private IdentityResponse formatResponse(Contact primary, List<Contact> related) {
+        // LinkedHashSet keeps the primary info at the first position 
         Set<String> emails = new LinkedHashSet<>();
-        emails.add(primary.getEmail());
-        allRelated.forEach(c -> { if(c.getEmail() != null) emails.add(c.getEmail()); });
+        if (primary.getEmail() != null) emails.add(primary.getEmail());
+        related.stream().map(Contact::getEmail).filter(Objects::nonNull).forEach(emails::add);
 
         Set<String> phones = new LinkedHashSet<>();
-        phones.add(primary.getPhoneNumber());
-        allRelated.forEach(c -> { if(c.getPhoneNumber() != null) phones.add(c.getPhoneNumber()); });
+        if (primary.getPhoneNumber() != null) phones.add(primary.getPhoneNumber());
+        related.stream().map(Contact::getPhoneNumber).filter(Objects::nonNull).forEach(phones::add);
 
-        List<Integer> secondaryIds = allRelated.stream()
+        List<Integer> secondaryIds = related.stream()
                 .map(Contact::getId)
                 .filter(id -> !id.equals(primary.getId()))
                 .collect(Collectors.toList());
 
-        details.setEmails(emails);
-        details.setPhoneNumbers(phones);
-        details.setSecondaryContactIds(secondaryIds);
-        response.setContact(details);
-        return response;
+        return IdentityResponse.builder()
+                .contact(IdentityResponse.ContactDetails.builder()
+                        .primaryContactId(primary.getId())
+                        .emails(new ArrayList<>(emails))
+                        .phoneNumbers(new ArrayList<>(phones))
+                        .secondaryContactIds(secondaryIds)
+                        .build())
+                .build();
     }
-
 }
