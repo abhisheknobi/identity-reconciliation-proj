@@ -33,8 +33,7 @@ build/
 .vscode/
 # Ignore Spring Boot configuration files containing secrets
 src/main/resources/application.properties
-src/main/java/com/identity_reconciliation/service
-src/main/java/com/identity_reconciliation/controller
+
 
 
 
