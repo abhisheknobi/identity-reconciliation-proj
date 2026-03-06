@@ -33,7 +33,7 @@ build/
 .vscode/
 # Ignore Spring Boot configuration files containing secrets
 src/main/resources/application.properties
-
+.mvn
 
 
 
