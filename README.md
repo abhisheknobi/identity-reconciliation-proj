@@ -3,7 +3,7 @@
 This is a Spring Boot implementation of the **Bitespeed Backend Task: Identity Reconciliation**. The service helps FluxKart.com link different orders made with different contact information (email or phone number) to the same customer profile.
 
 ## 🚀 Live Demo
-* **API Endpoint:** `[Insert your Render/Hosted URL here]/identify`
+* **API Endpoint:** `https://identity-reconciliation-proj.onrender.com/identify`
 
 ## 🛠️ Tech Stack
 * **Java 17**
