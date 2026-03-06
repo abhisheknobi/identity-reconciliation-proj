@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @Setter
-@NoArgsConstructor
 @RequiredArgsConstructor
 public class Contact {
 
