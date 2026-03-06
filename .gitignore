@@ -35,7 +35,6 @@ build/
 src/main/resources/application.properties
 src/main/java/com/identity_reconciliation/service
 src/main/java/com/identity_reconciliation/controller
-src/main/java/com/identity_reconciliation/dto
-src/main/java/com/identity_reconciliation/repository
+
 
 
