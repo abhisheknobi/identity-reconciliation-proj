@@ -9,7 +9,7 @@ This is a Spring Boot implementation of the **Bitespeed Backend Task: Identity R
 * **Java 21**
 * **Spring Boot 4.0.0**
 * **Spring Data JPA** (for relational database management)
-* **MySQL** (Database)
+* **Postgres** (Database)
 * **Lombok** (for boilerplate reduction)
 
 ## 🏗️ Core Logic
