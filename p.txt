@@ -1,0 +1,47 @@
+🚗 Step-by-Step Scenario: Linking Two Separate Identities
+Imagine your database already has two separate customers:
+
+Identity A: id: 1 | email: doc@brown.com | phoneNumber: 1985 (Primary)
+
+Identity B: id: 5 | email: marty@mcfly.com | phoneNumber: 1955 (Primary)
+
+The Trigger Request
+A new order comes in with: { "email": "doc@brown.com", "phoneNumber": "1955" }.
+
+1. The Detection Phase
+The service finds Identity A (via email) and Identity B (via phone number). It identifies that both are currently "Primary" records.
+
+2. The "Older is Gold" Rule
+The service compares the createdAt timestamps.
+
+Since id: 1 was created first, it stays the True Primary.
+
+The newer primary (id: 5) must now be demoted.
+
+3. The Database Update
+The service performs these actions:
+
+Changes id: 5 from primary to secondary.
+
+Sets the linkedId of id: 5 to 1.
+
+Updates any existing "children" (secondary contacts) of id: 5 to now point directly to id: 1.
+
+🧪 Final Consolidated Response
+The API will return a single, unified view of the customer:
+
+JSON
+{
+  "contact": {
+    "primaryContactId": 1,
+    "emails": ["doc@brown.com", "marty@mcfly.com"],
+    "phoneNumbers": ["1985", "1955"],
+    "secondaryContactIds": [5]
+  }
+}
+💡 Why this is efficient
+Data Integrity: No customer data is ever deleted; it is only reorganized.
+
+History Tracking: By using the linkedId, we can always trace back how many different "identities" were eventually found to be the same person.
+
+Speed: Because we index the email and phoneNumber columns in our repository, the initial "lookup" is nearly instantaneous even with thousands of records.
