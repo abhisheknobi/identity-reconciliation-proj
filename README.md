@@ -6,10 +6,10 @@ This is a Spring Boot implementation of the **Bitespeed Backend Task: Identity R
 * **API Endpoint:** `https://identity-reconciliation-proj.onrender.com/identify`
 
 ## 🛠️ Tech Stack
-* **Java 17**
-* **Spring Boot 3.x**
+* **Java 21**
+* **Spring Boot 4.0.0**
 * **Spring Data JPA** (for relational database management)
-* **MySQL** (or any SQL database)
+* **MySQL** (Database)
 * **Lombok** (for boilerplate reduction)
 
 ## 🏗️ Core Logic

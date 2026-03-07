@@ -16,4 +16,3 @@ public interface ContactRepository extends JpaRepository<Contact, Integer> {
     // Finds records specifically linked to a primary ID
     List<Contact> findByLinkedId(Integer linkedId);
 }
-
